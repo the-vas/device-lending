@@ -8,8 +8,10 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
+	"github.com/the-vas/device-lending/internal/authsetup"
 	"github.com/the-vas/device-lending/internal/config"
 	_ "github.com/the-vas/device-lending/internal/migrations"
+	"github.com/the-vas/device-lending/internal/oidcdiscovery"
 )
 
 func main() {
@@ -30,6 +32,15 @@ func main() {
 			return e.String(200, "ok")
 		})
 		return se.Next()
+	})
+
+	authsetup.RegisterOIDCScopes("groups")
+
+	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
+		if err := e.Next(); err != nil {
+			return err
+		}
+		return authsetup.ConfigureOAuth2(e.App, cfg, oidcdiscovery.Fetch)
 	})
 
 	if err := app.Start(); err != nil {
