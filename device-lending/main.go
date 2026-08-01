@@ -10,6 +10,7 @@ import (
 
 	"github.com/the-vas/device-lending/internal/authsetup"
 	"github.com/the-vas/device-lending/internal/config"
+	"github.com/the-vas/device-lending/internal/devices"
 	_ "github.com/the-vas/device-lending/internal/migrations"
 	"github.com/the-vas/device-lending/internal/oidcdiscovery"
 )
@@ -35,6 +36,8 @@ func main() {
 	})
 
 	authsetup.RegisterOIDCScopes("groups")
+
+	devices.BindStateFieldGuard(app)
 
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
 		if err := e.Next(); err != nil {
