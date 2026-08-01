@@ -40,7 +40,11 @@ func main() {
 		if err := e.Next(); err != nil {
 			return err
 		}
-		return authsetup.ConfigureOAuth2(e.App, cfg, oidcdiscovery.Fetch)
+		if err := authsetup.ConfigureOAuth2(e.App, cfg, oidcdiscovery.Fetch); err != nil {
+			return err
+		}
+		authsetup.BindAdminSync(e.App, cfg.OIDCAdminGroup)
+		return nil
 	})
 
 	if err := app.Start(); err != nil {
