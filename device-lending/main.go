@@ -44,6 +44,9 @@ func main() {
 			return err
 		}
 		authsetup.BindAdminSync(e.App, cfg.OIDCAdminGroup)
+		if err := authsetup.ApplyReadRules(e.App, cfg.PublicRead); err != nil {
+			return err
+		}
 		return nil
 	})
 
