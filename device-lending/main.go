@@ -13,6 +13,7 @@ import (
 	"github.com/the-vas/device-lending/internal/devices"
 	_ "github.com/the-vas/device-lending/internal/migrations"
 	"github.com/the-vas/device-lending/internal/oidcdiscovery"
+	"github.com/the-vas/device-lending/internal/webauth"
 )
 
 func main() {
@@ -29,9 +30,17 @@ func main() {
 	})
 
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
+		signer := webauth.NewSigner(cfg.SessionSecret)
+
+		se.Router.BindFunc(webauth.LoadSession(signer))
+		se.Router.GET("/oidc/login", webauth.LoginHandler(cfg.BaseURL, signer))
+		se.Router.GET("/oidc/callback", webauth.CallbackHandler(cfg.BaseURL, signer, webauth.RouterExchanger))
+		se.Router.POST("/logout", webauth.LogoutHandler())
+
 		se.Router.GET("/healthz", func(e *core.RequestEvent) error {
 			return e.String(200, "ok")
 		})
+
 		return se.Next()
 	})
 
