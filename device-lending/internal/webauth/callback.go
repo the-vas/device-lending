@@ -95,6 +95,9 @@ func CallbackHandler(baseURL string, signer Signer, exchange Exchanger) func(e *
 		if err != nil {
 			return e.InternalServerError("oidc token exchange failed", err)
 		}
+		if result.Token == "" {
+			return e.InternalServerError("oidc exchange returned no token", nil)
+		}
 
 		e.SetCookie(&http.Cookie{
 			Name:     SessionCookieName,

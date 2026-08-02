@@ -137,3 +137,36 @@ func TestCallbackHandler_MissingCookie(t *testing.T) {
 		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 }
+
+func TestCallbackHandler_EmptyToken(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+
+	signer := webauth.NewSigner("test-secret-at-least-32-bytes-long")
+	emptyTokenExchange := func(app core.App, code, codeVerifier, redirectURL string) (webauth.ExchangeResult, error) {
+		return webauth.ExchangeResult{Token: "", Record: map[string]any{"id": "u1"}}, nil
+	}
+
+	mux := registerCallbackRoute(t, app, signer, emptyTokenExchange)
+
+	req := httptest.NewRequest(http.MethodGet, "/oidc/callback?code=auth-code-123&state=state-xyz", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  webauth.PKCECookieName,
+		Value: signer.Sign("state-xyz|verifier-abc"),
+	})
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusFound {
+		t.Fatalf("expected an error status, got 302 redirect with body: %s", rec.Body.String())
+	}
+
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == webauth.SessionCookieName && c.Value != "" {
+			t.Error("expected no session cookie to be set for an empty token")
+		}
+	}
+}
