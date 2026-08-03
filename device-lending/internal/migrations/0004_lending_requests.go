@@ -32,6 +32,8 @@ func init() {
 			&core.DateField{Name: "requested_end"},
 			&core.TextField{Name: "message", Max: 2000},
 			&core.DateField{Name: "decided_at"},
+			&core.AutodateField{Name: "created", OnCreate: true},
+			&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
 		)
 
 		viewRule := `@request.auth.id != "" && (requester = @request.auth.id || device.owner = @request.auth.id || @request.auth.is_admin = true)`

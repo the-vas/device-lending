@@ -15,7 +15,7 @@ func pendingRequests(app core.App, deviceID string) ([]*core.Record, error) {
 	return app.FindRecordsByFilter(
 		"lending_requests",
 		"device = {:device} && status = 'pending'",
-		"-id",
+		"-created",
 		0, 0,
 		dbx.Params{"device": deviceID},
 	)

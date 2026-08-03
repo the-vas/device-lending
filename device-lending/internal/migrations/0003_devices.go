@@ -41,6 +41,8 @@ func init() {
 			&core.RelationField{Name: "current_borrower", CollectionId: users.Id, MaxSelect: 1},
 			&core.DateField{Name: "lend_start"},
 			&core.DateField{Name: "lend_end"},
+			&core.AutodateField{Name: "created", OnCreate: true},
+			&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
 		)
 
 		// List/View are provisionally authenticated-only; Task 10's boot-time

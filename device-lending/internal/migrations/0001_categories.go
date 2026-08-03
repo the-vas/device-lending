@@ -13,6 +13,8 @@ func init() {
 
 		collection.Fields.Add(
 			&core.TextField{Name: "name", Required: true, Max: 100},
+			&core.AutodateField{Name: "created", OnCreate: true},
+			&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
 		)
 
 		collection.Indexes = []string{
