@@ -1,0 +1,83 @@
+/* internal/web/static/style.css */
+:root {
+  --accent: #2b6cb0;
+  --border: #d9dde3;
+  --text: #1a202c;
+  --bg: #ffffff;
+  --muted: #6b7280;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+.site-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.site-header .brand { font-weight: 600; text-decoration: none; color: var(--text); }
+.site-header nav { display: flex; gap: 1rem; align-items: center; }
+.site-header nav a { text-decoration: none; color: var(--text); }
+.site-header nav form.inline { display: inline; margin: 0; }
+
+main { max-width: 960px; margin: 0 auto; padding: 1.5rem; }
+
+.device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.device-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.device-card img { width: 100%; height: 140px; object-fit: cover; border-radius: 4px; }
+
+.status-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #edf2f7;
+  color: var(--muted);
+}
+
+.status-available { background: #e6fffa; color: #047857; }
+.status-requested { background: #fefcbf; color: #92400e; }
+.status-lent { background: #fee2e2; color: #b91c1c; }
+.status-unavailable { background: #edf2f7; color: var(--muted); }
+
+button, input[type="submit"] {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+form.inline button { background: none; color: var(--muted); text-decoration: underline; padding: 0; }
+
+input, textarea, select {
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  width: 100%;
+}
+
+#device-map, .device-map-picker { height: 300px; border-radius: 8px; }

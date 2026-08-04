@@ -1,10 +1,12 @@
 package main
 
 import (
+	"io/fs"
 	"log"
 	"os"
 
 	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/the-vas/device-lending/internal/mail"
 	_ "github.com/the-vas/device-lending/internal/migrations"
 	"github.com/the-vas/device-lending/internal/oidcdiscovery"
+	"github.com/the-vas/device-lending/internal/web"
 	"github.com/the-vas/device-lending/internal/webauth"
 )
 
@@ -30,6 +33,11 @@ func main() {
 		Automigrate: true,
 	})
 
+	staticSub, err := fs.Sub(web.StaticFS, "static")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		signer := webauth.NewSigner(cfg.SessionSecret)
 
@@ -37,6 +45,8 @@ func main() {
 		se.Router.GET("/oidc/login", webauth.LoginHandler(cfg.BaseURL, signer))
 		se.Router.GET("/oidc/callback", webauth.CallbackHandler(cfg.BaseURL, signer, webauth.RouterExchanger))
 		se.Router.POST("/logout", webauth.LogoutHandler())
+
+		se.Router.GET("/static/{path...}", apis.Static(staticSub, false))
 
 		se.Router.GET("/healthz", func(e *core.RequestEvent) error {
 			return e.String(200, "ok")

@@ -1,0 +1,28 @@
+<!-- internal/web/templates/layout.html -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · Device Lending</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/htmx.min.js"></script>
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="/">Device Lending</a>
+  <nav>
+    <a href="/">Browse</a>
+    {{if .CurrentUser}}
+      <a href="/my/devices">My devices</a>
+      <a href="/my/requests">My requests</a>
+      {{if .IsAdmin}}<a href="/admin">Admin</a>{{end}}
+      <form action="/logout" method="post" class="inline"><button type="submit">Log out</button></form>
+    {{else}}
+      <a href="/oidc/login">Log in</a>
+    {{end}}
+  </nav>
+</header>
+<main>{{block "content" .}}{{end}}</main>
+</body>
+</html>
