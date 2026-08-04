@@ -1,0 +1,19 @@
+<!-- internal/web/templates/index.html -->
+{{define "content"}}
+<h1>Devices</h1>
+<form method="get" action="/">
+  <input type="search" name="q" placeholder="Search devices…" value="{{.Query}}">
+</form>
+<div class="device-grid">
+  {{range .Devices}}
+  <a class="device-card" href="/devices/{{.ID}}">
+    {{if .PhotoURL}}<img src="{{.PhotoURL}}" alt="{{.Name}}">{{end}}
+    <h3>{{.Name}}</h3>
+    <span class="status-badge status-{{.Status}}">{{.Status}}</span>
+    {{if .LocationLabel}}<p>{{.LocationLabel}}</p>{{end}}
+  </a>
+  {{else}}
+  <p>No devices found.</p>
+  {{end}}
+</div>
+{{end}}
