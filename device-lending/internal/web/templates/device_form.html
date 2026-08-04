@@ -1,0 +1,33 @@
+<!-- internal/web/templates/device_form.html -->
+{{define "content"}}
+<h1>{{if .IsEdit}}Edit device{{else}}New device{{end}}</h1>
+<form method="post" action="{{if .IsEdit}}/devices/{{.Device.Id}}/edit{{else}}/devices/new{{end}}" enctype="multipart/form-data">
+  <label>Name <input type="text" name="name" required value="{{if .Device}}{{.Device.GetString "name"}}{{end}}"></label>
+  <label>Description <textarea name="description">{{if .Device}}{{.Device.GetString "description"}}{{end}}</textarea></label>
+  <label>Category
+    <select name="category" required>
+      {{range .Categories}}<option value="{{.Id}}">{{.GetString "name"}}</option>{{end}}
+    </select>
+  </label>
+  <label>Location label <input type="text" name="location_label" value="{{if .Device}}{{.Device.GetString "location_label"}}{{end}}"></label>
+
+  <link rel="stylesheet" href="/static/leaflet/leaflet.css">
+  <div id="location-picker" class="device-map-picker"></div>
+  <input type="hidden" name="lat" id="lat-input">
+  <input type="hidden" name="lon" id="lon-input">
+  <script src="/static/leaflet/leaflet.js"></script>
+  <script>
+    var pickMap = L.map('location-picker').setView([51.505, -0.09], 4);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(pickMap);
+    var marker;
+    pickMap.on('click', function(ev) {
+      document.getElementById('lat-input').value = ev.latlng.lat;
+      document.getElementById('lon-input').value = ev.latlng.lng;
+      if (marker) { marker.setLatLng(ev.latlng); } else { marker = L.marker(ev.latlng).addTo(pickMap); }
+    });
+  </script>
+
+  <label>Photo <input type="file" name="photo" accept="image/*"></label>
+  <button type="submit">Save</button>
+</form>
+{{end}}
