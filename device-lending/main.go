@@ -11,6 +11,7 @@ import (
 	"github.com/the-vas/device-lending/internal/authsetup"
 	"github.com/the-vas/device-lending/internal/config"
 	"github.com/the-vas/device-lending/internal/devices"
+	"github.com/the-vas/device-lending/internal/mail"
 	_ "github.com/the-vas/device-lending/internal/migrations"
 	"github.com/the-vas/device-lending/internal/oidcdiscovery"
 	"github.com/the-vas/device-lending/internal/webauth"
@@ -47,6 +48,9 @@ func main() {
 	authsetup.RegisterOIDCScopes("groups")
 
 	devices.BindStateFieldGuard(app)
+
+	notifier := mail.New(app, cfg.BaseURL)
+	devices.BindDeleteCascade(app, notifier)
 
 	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
 		if err := e.Next(); err != nil {
