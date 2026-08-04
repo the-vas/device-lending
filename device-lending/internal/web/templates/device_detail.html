@@ -1,0 +1,66 @@
+<!-- internal/web/templates/device_detail.html -->
+{{define "content"}}
+<h1>{{.Device.GetString "name"}}</h1>
+<span class="status-badge status-{{.Device.GetString "status"}}">{{.Device.GetString "status"}}</span>
+{{if .PhotoURL}}<p><img src="{{.PhotoURL}}" alt="{{.Device.GetString "name"}}" style="max-width:300px"></p>{{end}}
+<p>{{.Device.GetString "description"}}</p>
+<p>Category: {{.CategoryName}}</p>
+<p>Owner: {{.OwnerName}}</p>
+{{if .LocationLabel}}<p>Location: {{.LocationLabel}}</p>{{end}}
+{{if .BorrowerName}}<p>Currently with: {{.BorrowerName}}</p>{{end}}
+
+<link rel="stylesheet" href="/static/leaflet/leaflet.css">
+<div id="device-map"></div>
+<script src="/static/leaflet/leaflet.js"></script>
+<script>
+  var map = L.map('device-map').setView([{{.Lat}}, {{.Lon}}], 14);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(map);
+  L.marker([{{.Lat}}, {{.Lon}}]).addTo(map);
+</script>
+
+{{if .CanRequest}}
+<h2>Request to borrow</h2>
+<form method="post" action="/devices/{{.Device.Id}}/request">
+  <label>Start date <input type="date" name="requested_start" required></label>
+  <label>End date (optional) <input type="date" name="requested_end"></label>
+  <label>Message <textarea name="message"></textarea></label>
+  <button type="submit">Request</button>
+</form>
+{{end}}
+
+{{if .MyPendingRequest}}
+<p>You have a pending request for this device.</p>
+<form method="post" action="/devices/{{.Device.Id}}/requests/{{.MyPendingRequest.Id}}/withdraw">
+  <button type="submit">Withdraw request</button>
+</form>
+{{end}}
+
+{{if .IsOwner}}
+<h2>Owner actions</h2>
+<p><a href="/devices/{{.Device.Id}}/edit">Edit device</a></p>
+<form method="post" action="/devices/{{.Device.Id}}/delete" class="inline"><button type="submit">Delete device</button></form>
+
+{{if eq (.Device.GetString "status") "lent"}}
+<form method="post" action="/devices/{{.Device.Id}}/return" class="inline"><button type="submit">Mark returned</button></form>
+{{end}}
+
+{{if .PendingRequests}}
+<h3>Pending requests</h3>
+<ul>
+{{range .PendingRequests}}
+<li>
+  {{.RequesterName}} ({{.RequesterEmail}}) — {{.RequestedStart}} to {{.RequestedEnd}} — {{.Message}}
+  <form method="post" action="/devices/{{$.Device.Id}}/handover" class="inline">
+    <input type="hidden" name="request_id" value="{{.ID}}">
+    <input type="date" name="lend_end">
+    <button type="submit">Hand over to this person</button>
+  </form>
+  <form method="post" action="/devices/{{$.Device.Id}}/requests/{{.ID}}/reject" class="inline">
+    <button type="submit">Reject</button>
+  </form>
+</li>
+{{end}}
+</ul>
+{{end}}
+{{end}}
+{{end}}
