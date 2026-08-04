@@ -32,12 +32,8 @@ func TestDeleteCascade_RejectsPendingAndNotifies(t *testing.T) {
 		t.Fatalf("unexpected error deleting device: %v", err)
 	}
 
-	updatedReq, err := app.FindRecordById("lending_requests", req.Id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if updatedReq.GetString("status") != "rejected" {
-		t.Errorf("expected status 'rejected', got %q", updatedReq.GetString("status"))
+	if _, err := app.FindRecordById("lending_requests", req.Id); err == nil {
+		t.Error("expected the pending request to be cascade-deleted along with the device")
 	}
 
 	if app.TestMailer.TotalSend() != 1 {

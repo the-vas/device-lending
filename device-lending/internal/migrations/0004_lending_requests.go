@@ -20,7 +20,7 @@ func init() {
 		collection := core.NewBaseCollection("lending_requests")
 
 		collection.Fields.Add(
-			&core.RelationField{Name: "device", Required: true, CollectionId: devices.Id, MaxSelect: 1},
+			&core.RelationField{Name: "device", Required: true, CascadeDelete: true, CollectionId: devices.Id, MaxSelect: 1},
 			&core.RelationField{Name: "requester", Required: true, CollectionId: users.Id, MaxSelect: 1},
 			&core.SelectField{
 				Name:      "status",

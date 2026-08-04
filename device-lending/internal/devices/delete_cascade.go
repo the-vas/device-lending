@@ -2,22 +2,20 @@ package devices
 
 import (
 	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/tools/types"
 
 	"github.com/the-vas/device-lending/internal/mail"
 )
 
-// BindDeleteCascade auto-rejects any pending lending_requests for a device
-// before that device is deleted, and emails each affected requester. It
-// binds to OnRecordDelete (not OnRecordAfterDeleteSuccess) so it covers both
-// API-triggered deletes and direct app.Delete() calls, and so it runs before
-// PocketBase's built-in relation-integrity check: the "device" relation on
-// lending_requests is a required field (Task 6's migration), so PocketBase
-// refuses to delete a device that any lending_requests row still points to.
-// Clearing the "device" reference on the pending rows here — in addition to
-// rejecting them — lets the subsequent delete proceed instead of failing
-// with "record cannot be deleted because it is part of a required
-// reference".
+// BindDeleteCascade emails each requester with a pending lending_requests
+// row before a device is deleted. The "device" relation on lending_requests
+// is configured with CascadeDelete (Task 6's migration), so PocketBase
+// itself deletes every lending_requests row for the device — pending,
+// accepted, rejected, and withdrawn alike — as part of the device delete.
+// This hook only needs to read the pending rows and notify their requesters
+// before that happens; it binds to OnRecordDelete (not
+// OnRecordAfterDeleteSuccess) so it runs before the cascade deletion, while
+// the pending rows still exist, and so it covers both API-triggered deletes
+// and direct app.Delete() calls.
 func BindDeleteCascade(app core.App, notifier *mail.Notifier) {
 	app.OnRecordDelete("devices").BindFunc(func(e *core.RecordEvent) error {
 		pending, err := pendingRequests(e.App, e.Record.Id)
@@ -28,13 +26,6 @@ func BindDeleteCascade(app core.App, notifier *mail.Notifier) {
 		for _, req := range pending {
 			requester, err := e.App.FindRecordById("users", req.GetString("requester"))
 			if err != nil {
-				return err
-			}
-
-			req.Set("status", "rejected")
-			req.Set("decided_at", types.NowDateTime())
-			req.Set("device", "")
-			if err := e.App.SaveNoValidate(req); err != nil {
 				return err
 			}
 
