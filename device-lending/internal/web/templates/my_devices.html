@@ -1,0 +1,12 @@
+<!-- internal/web/templates/my_devices.html -->
+{{define "content"}}
+<h1>My devices</h1>
+<p><a href="/devices/new">+ Add a device</a></p>
+<ul>
+{{range .Devices}}
+<li><a href="/devices/{{.ID}}">{{.Name}}</a> — {{.Status}}{{if .PendingCount}} ({{.PendingCount}} pending request(s)){{end}}</li>
+{{else}}
+<li>You haven't listed any devices yet.</li>
+{{end}}
+</ul>
+{{end}}
