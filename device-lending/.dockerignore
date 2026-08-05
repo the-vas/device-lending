@@ -1,0 +1,4 @@
+# .dockerignore
+pb_data/
+*.db
+.git/

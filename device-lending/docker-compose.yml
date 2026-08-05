@@ -1,0 +1,21 @@
+# docker-compose.yml
+services:
+  device-lending:
+    build: .
+    ports:
+      - "8090:8090"
+    volumes:
+      - pb_data:/app/pb_data
+    environment:
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      OIDC_ADMIN_GROUP: ${OIDC_ADMIN_GROUP:-}
+      BASE_URL: ${BASE_URL}
+      SESSION_SECRET: ${SESSION_SECRET}
+      PUBLIC_READ: ${PUBLIC_READ:-false}
+      HTTP_ADDR: 0.0.0.0:8090
+    restart: unless-stopped
+
+volumes:
+  pb_data:
