@@ -1,0 +1,26 @@
+<!-- internal/web/templates/admin.html -->
+{{define "content"}}
+<h1>Admin cleanup</h1>
+<h2>Devices</h2>
+<ul>
+{{range .Devices}}
+<li>
+  <a href="/devices/{{.Id}}">{{.GetString "name"}}</a> — {{.GetString "status"}}
+  <form method="post" action="/admin/devices/{{.Id}}/delete" class="inline"><button type="submit">Delete</button></form>
+</li>
+{{else}}
+<li>No devices.</li>
+{{end}}
+</ul>
+<h2>Lending requests</h2>
+<ul>
+{{range .Requests}}
+<li>
+  {{.Id}} — {{.GetString "status"}}
+  <form method="post" action="/admin/requests/{{.Id}}/delete" class="inline"><button type="submit">Delete</button></form>
+</li>
+{{else}}
+<li>No requests.</li>
+{{end}}
+</ul>
+{{end}}
