@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -96,6 +97,85 @@ func TestCreateDeviceHandler_SetsOwnerAndSaves(t *testing.T) {
 	}
 	if created[0].GetGeoPoint("location_point").Lat != 52.5 {
 		t.Errorf("expected lat 52.5, got %v", created[0].GetGeoPoint("location_point").Lat)
+	}
+}
+
+// TestEditDeviceFormHandler_PreselectsCurrentCategory guards against the edit
+// form silently resetting a device's category: without a selected attribute the
+// browser defaults to the first option, so saving the form untouched rewrites
+// the category.
+func TestEditDeviceFormHandler_PreselectsCurrentCategory(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+
+	owner := newTestUserFor(t, app, "owner@example.com")
+	device := newTestDeviceForBrowse(t, app, owner, "Cordless Drill")
+
+	// Extra categories that sort either side of the device's own category
+	// ("Category for Cordless Drill"), so a passing assertion cannot be an
+	// accident of the option order.
+	newTestCategory(t, app, "AAA Adapters")
+	newTestCategory(t, app, "ZZZ Widgets")
+
+	mux := buildMux(t, app, func(e *core.ServeEvent) {
+		e.Router.BindFunc(func(re *core.RequestEvent) error {
+			re.Auth = owner
+			return re.Next()
+		})
+		e.Router.GET("/devices/{id}/edit", web.EditDeviceFormHandler(app))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/devices/"+device.Id+"/edit", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	want := `<option value="` + device.GetString("category") + `" selected>`
+	if !strings.Contains(body, want) {
+		t.Errorf("expected the current category option to be preselected (%s)\ngot:\n%s", want, body)
+	}
+	if n := strings.Count(body, " selected>"); n != 1 {
+		t.Errorf("expected exactly 1 preselected option, got %d", n)
+	}
+}
+
+// TestNewDeviceFormHandler_PreselectsNothing is the nil-Device guard for the
+// same template change.
+func TestNewDeviceFormHandler_PreselectsNothing(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+
+	owner := newTestUserFor(t, app, "owner@example.com")
+	newTestCategory(t, app, "Power tools")
+	newTestCategory(t, app, "Garden")
+
+	mux := buildMux(t, app, func(e *core.ServeEvent) {
+		e.Router.BindFunc(func(re *core.RequestEvent) error {
+			re.Auth = owner
+			return re.Next()
+		})
+		e.Router.GET("/devices/new", web.NewDeviceFormHandler(app))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/devices/new", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), " selected>") {
+		t.Error("expected no category to be preselected on the new device form")
 	}
 }
 

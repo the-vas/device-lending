@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io/fs"
 	"log"
 	"os"
@@ -21,6 +22,41 @@ import (
 	_ "github.com/the-vas/device-lending/internal/migrations"
 )
 
+// bindBootstrap registers the app's OnBootstrap handler: it applies the app's
+// own migrations and then the runtime collection configuration that depends on
+// them (OIDC provider config, admin sync, public read rules).
+func bindBootstrap(
+	app core.App,
+	cfg config.Config,
+	discover func(ctx context.Context, issuer string) (oidcdiscovery.Document, error),
+) {
+	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
+		// e.Next() performs the actual bootstrap (opens the databases,
+		// initializes the logger, runs the *system* migrations). It has to run
+		// first: before it there is no database connection at all.
+		if err := e.Next(); err != nil {
+			return err
+		}
+
+		// core.Bootstrap only runs core.SystemMigrations, so on a genuinely
+		// fresh pb_data directory this app's own migrations (categories,
+		// devices, lending_requests, users.is_admin) have not been applied
+		// yet — they would otherwise only run later, from apis.Serve. Every
+		// call below needs those collections to exist, so apply them here.
+		// Already-applied migrations are recorded in the _migrations table,
+		// so apis.Serve re-running this later is a no-op.
+		if err := e.App.RunAllMigrations(); err != nil {
+			return err
+		}
+
+		if err := authsetup.ConfigureOAuth2(e.App, cfg, discover); err != nil {
+			return err
+		}
+		authsetup.BindAdminSync(e.App, cfg.OIDCAdminGroup)
+		return authsetup.ApplyReadRules(e.App, cfg.PublicRead)
+	})
+}
+
 func main() {
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
@@ -35,18 +71,10 @@ func main() {
 
 	authsetup.RegisterOIDCScopes("groups")
 
-	app.OnBootstrap().BindFunc(func(e *core.BootstrapEvent) error {
-		if err := e.Next(); err != nil {
-			return err
-		}
-		if err := authsetup.ConfigureOAuth2(e.App, cfg, oidcdiscovery.Fetch); err != nil {
-			return err
-		}
-		authsetup.BindAdminSync(e.App, cfg.OIDCAdminGroup)
-		return authsetup.ApplyReadRules(e.App, cfg.PublicRead)
-	})
+	bindBootstrap(app, cfg, oidcdiscovery.Fetch)
 
 	devices.BindStateFieldGuard(app)
+	authsetup.BindAnonymousDeviceRedaction(app)
 
 	notifier := mail.New(app, cfg.BaseURL)
 	devices.BindDeleteCascade(app, notifier)

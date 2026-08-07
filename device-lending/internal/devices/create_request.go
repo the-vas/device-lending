@@ -1,6 +1,8 @@
 package devices
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/pocketbase/dbx"
@@ -21,6 +23,42 @@ func pendingRequests(app core.App, deviceID string) ([]*core.Record, error) {
 	)
 }
 
+// ErrNotRequestable reports that the request-eligibility policy refuses a new
+// lending request. Callers should surface it as a 400, not a 500.
+var ErrNotRequestable = errors.New("device cannot be requested")
+
+// CheckRequestable returns nil when requester is allowed to open a new pending
+// request for device, and an error wrapping [ErrNotRequestable] otherwise.
+//
+// It is the single source of truth for the policy: the device detail page uses
+// it to decide whether to render the request form, and CreateRequest enforces
+// it so a direct POST cannot bypass the UI.
+func CheckRequestable(app core.App, device, requester *core.Record) error {
+	if requester.Id == device.GetString("owner") {
+		return fmt.Errorf("%w: you cannot request your own device", ErrNotRequestable)
+	}
+
+	switch device.GetString("status") {
+	case "available", "requested":
+	default:
+		return fmt.Errorf("%w: %q is not available to borrow", ErrNotRequestable, device.GetString("name"))
+	}
+
+	existing, err := app.FindFirstRecordByFilter(
+		"lending_requests",
+		"device = {:device} && requester = {:requester} && status = 'pending'",
+		dbx.Params{"device": device.Id, "requester": requester.Id},
+	)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("checking for an existing request: %w", err)
+	}
+	if existing != nil {
+		return fmt.Errorf("%w: you already have a pending request for this device", ErrNotRequestable)
+	}
+
+	return nil
+}
+
 // CreateRequest creates a pending lending_requests record, transitions the device
 // from "available" to "requested" if needed, and emails the owner.
 func CreateRequest(
@@ -30,6 +68,10 @@ func CreateRequest(
 	requestedStart, requestedEnd types.DateTime,
 	message string,
 ) (*core.Record, error) {
+	if err := CheckRequestable(app, device, requester); err != nil {
+		return nil, err
+	}
+
 	col, err := app.FindCollectionByNameOrId("lending_requests")
 	if err != nil {
 		return nil, err
@@ -61,9 +103,7 @@ func CreateRequest(
 		return nil, fmt.Errorf("loading device owner: %w", err)
 	}
 
-	if err := notifier.NewRequest(owner, device, requester); err != nil {
-		return nil, fmt.Errorf("sending notification: %w", err)
-	}
+	logNotifyFailure(app, "create_request", notifier.NewRequest(owner, device, requester))
 
 	return request, nil
 }

@@ -3,6 +3,7 @@ package authsetup
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/auth"
@@ -19,12 +20,23 @@ func RegisterOIDCScopes(extra ...string) {
 	}
 }
 
+// discoveryTimeout bounds the synchronous OIDC discovery call made during
+// bootstrap. Discovery failing is deliberately fatal — the app cannot serve
+// logins without a provider config — but a hung or very slow IdP must not
+// block startup indefinitely, which a bare context.Background() would allow.
+//
+// It is a variable only so the tests can shorten it.
+var discoveryTimeout = 15 * time.Second
+
 func ConfigureOAuth2(
 	app core.App,
 	cfg config.Config,
 	discover func(ctx context.Context, issuer string) (oidcdiscovery.Document, error),
 ) error {
-	doc, err := discover(context.Background(), cfg.OIDCIssuer)
+	ctx, cancel := context.WithTimeout(context.Background(), discoveryTimeout)
+	defer cancel()
+
+	doc, err := discover(ctx, cfg.OIDCIssuer)
 	if err != nil {
 		return fmt.Errorf("discovering OIDC issuer %q: %w", cfg.OIDCIssuer, err)
 	}

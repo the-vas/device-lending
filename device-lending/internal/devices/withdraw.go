@@ -38,5 +38,7 @@ func Withdraw(app core.App, notifier *mail.Notifier, request *core.Record) error
 		return fmt.Errorf("loading requester: %w", err)
 	}
 
-	return notifier.RequestWithdrawn(owner, device, requester)
+	logNotifyFailure(app, "request_withdrawn", notifier.RequestWithdrawn(owner, device, requester))
+
+	return nil
 }

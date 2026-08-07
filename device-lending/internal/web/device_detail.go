@@ -2,6 +2,7 @@
 package web
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/pocketbase/dbx"
@@ -75,7 +76,7 @@ func DeviceDetailHandler(app core.App, publicRead bool) func(e *core.RequestEven
 			"BorrowerName":     borrowerName,
 			"PhotoURL":         devicePhotoURL(device),
 			"IsOwner":          isOwner || isAdmin,
-			"CanRequest":       e.Auth != nil && !isOwner && myPendingRequest == nil && (status == "available" || status == "requested"),
+			"CanRequest":       e.Auth != nil && devices.CheckRequestable(app, device, e.Auth) == nil,
 			"MyPendingRequest": myPendingRequest,
 			"Lat":              device.GetGeoPoint("location_point").Lat,
 			"Lon":              device.GetGeoPoint("location_point").Lon,
@@ -150,6 +151,11 @@ func RequestDeviceHandler(app core.App, notifier *mail.Notifier) func(e *core.Re
 		}
 
 		if _, err := devices.CreateRequest(app, notifier, device, e.Auth, start, end, e.Request.FormValue("message")); err != nil {
+			// The device page only renders the request form when the policy
+			// allows it, but a direct POST has to be refused too.
+			if errors.Is(err, devices.ErrNotRequestable) {
+				return e.BadRequestError(err.Error(), err)
+			}
 			return e.InternalServerError("failed to submit request", err)
 		}
 

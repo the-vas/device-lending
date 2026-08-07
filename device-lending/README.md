@@ -31,9 +31,23 @@ Copy `.env.example` to `.env` and fill in:
 | `OIDC_ISSUER` | yes | Your provider's issuer URL (its `/.well-known/openid-configuration` must be reachable at `<issuer>/.well-known/openid-configuration`) |
 | `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | yes | From your OIDC provider |
 | `OIDC_ADMIN_GROUP` | no | Group name granting admin/cleanup rights; leave unset to disable admin sync |
-| `BASE_URL` | yes | Public URL this app is reachable at, no trailing slash |
+| `BASE_URL` | yes | Public URL this app is reachable at, no trailing slash — must be `https://` in any real deployment, see below |
 | `SESSION_SECRET` | yes | Random string, 32+ characters, used to sign session cookies |
 | `PUBLIC_READ` | no (default `false`) | `true` to let anyone browse/view devices without logging in; requesting a device always requires login regardless |
+
+### HTTPS is required
+
+`BASE_URL` must be an `https://` URL (a real hostname, not `localhost`) in any
+deployment you actually log into. The session cookie this app sets after an
+OIDC login is marked `Secure`, so browsers only store and return it over a
+secure context — over plain `http://` on a non-`localhost` host the cookie is
+silently dropped and login appears to do nothing: you are redirected back to
+the home page still logged out, with no error anywhere.
+
+Terminate TLS in front of the container (reverse proxy, ingress, tunnel) and
+point `BASE_URL` at that public HTTPS address. `http://localhost:8090` is fine
+for local development only, because browsers treat `localhost` as a secure
+context.
 
 ## Running with Docker Compose
 
@@ -59,6 +73,25 @@ docker compose exec device-lending ./device-lending superuser upsert admin@examp
 Then visit `${BASE_URL}/_/` to log into the PocketBase admin panel, where you
 can add device categories (Collections → categories) and configure
 S3-compatible automated backups (Settings → Backups).
+
+### Email / SMTP settings
+
+The app sends notification emails for the whole lending workflow (new request,
+request declined, handover, device now unavailable, device available again,
+request withdrawn, device removed). There are no SMTP environment variables:
+mail is configured in the PocketBase admin panel you just logged into, under
+**Settings → Mail settings** — enable the SMTP server and fill in host, port,
+credentials and the sender address/name. Use its "Send test email" button to
+confirm the settings before relying on them.
+
+Until SMTP is configured, notification emails simply do not go out: PocketBase
+falls back to a local `sendmail` binary, which is not present in this app's
+Alpine-based image, so every send fails. This is logged (visit Logs in the
+admin panel) but is deliberately not treated as an error by the app — the
+underlying action still succeeds and is saved, so a user who submits a request
+or hands a device over gets the normal confirmation and the state change
+sticks. Only the notification is lost, so people will not be told about
+requests they need to act on until you configure SMTP.
 
 ## Becoming an admin
 

@@ -6,7 +6,7 @@
   <label>Description <textarea name="description">{{if .Device}}{{.Device.GetString "description"}}{{end}}</textarea></label>
   <label>Category
     <select name="category" required>
-      {{range .Categories}}<option value="{{.Id}}">{{.GetString "name"}}</option>{{end}}
+      {{range .Categories}}<option value="{{.Id}}"{{if $.Device}}{{if eq .Id ($.Device.GetString "category")}} selected{{end}}{{end}}>{{.GetString "name"}}</option>{{end}}
     </select>
   </label>
   <label>Location label <input type="text" name="location_label" value="{{if .Device}}{{.Device.GetString "location_label"}}{{end}}"></label>

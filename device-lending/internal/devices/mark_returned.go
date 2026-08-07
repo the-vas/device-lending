@@ -35,9 +35,7 @@ func MarkReturned(app core.App, notifier *mail.Notifier, device *core.Record) er
 		if err != nil {
 			return fmt.Errorf("loading requester: %w", err)
 		}
-		if err := notifier.DeviceAvailableAgain(requester, device); err != nil {
-			return fmt.Errorf("notifying requester: %w", err)
-		}
+		logNotifyFailure(app, "device_available_again", notifier.DeviceAvailableAgain(requester, device))
 	}
 
 	return nil

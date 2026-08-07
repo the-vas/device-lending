@@ -48,9 +48,7 @@ func Handover(app core.App, notifier *mail.Notifier, device, chosenRequest *core
 		lendEndStr = lendEnd.String()
 	}
 
-	if err := notifier.HandoverAccepted(requester, device, lendEndStr); err != nil {
-		return fmt.Errorf("notifying requester: %w", err)
-	}
+	logNotifyFailure(app, "handover_accepted", notifier.HandoverAccepted(requester, device, lendEndStr))
 
 	remainingOthers := 0
 	for _, other := range others {
@@ -67,9 +65,7 @@ func Handover(app core.App, notifier *mail.Notifier, device, chosenRequest *core
 		if err != nil {
 			return fmt.Errorf("loading other requester: %w", err)
 		}
-		if err := notifier.DeviceUnavailable(otherRequester, device, lendEndStr, remainingOthers-1); err != nil {
-			return fmt.Errorf("notifying other requester: %w", err)
-		}
+		logNotifyFailure(app, "device_unavailable", notifier.DeviceUnavailable(otherRequester, device, lendEndStr, remainingOthers-1))
 	}
 
 	return nil

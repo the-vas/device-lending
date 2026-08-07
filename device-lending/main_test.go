@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,7 +9,55 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tests"
+
+	"github.com/the-vas/device-lending/internal/config"
+	"github.com/the-vas/device-lending/internal/oidcdiscovery"
 )
+
+// TestBootstrap_FreshDataDir boots the app's real OnBootstrap chain against a
+// genuinely empty data directory — unlike tests.NewTestApp(), which calls
+// RunAllMigrations() itself before any hook fires and therefore hides the
+// bootstrap ordering entirely.
+func TestBootstrap_FreshDataDir(t *testing.T) {
+	app := core.NewBaseApp(core.BaseAppConfig{DataDir: t.TempDir()})
+	defer app.ResetBootstrapState() //nolint:errcheck // best-effort test cleanup
+
+	cfg := config.Config{
+		OIDCIssuer:       "https://auth.example.com",
+		OIDCClientID:     "abc",
+		OIDCClientSecret: "secret",
+		BaseURL:          "https://lending.example.com",
+		SessionSecret:    "at-least-32-bytes-of-random-secret",
+	}
+
+	discover := func(ctx context.Context, issuer string) (oidcdiscovery.Document, error) {
+		return oidcdiscovery.Document{
+			AuthorizationEndpoint: "https://auth.example.com/authorize",
+			TokenEndpoint:         "https://auth.example.com/token",
+			UserinfoEndpoint:      "https://auth.example.com/userinfo",
+		}, nil
+	}
+
+	bindBootstrap(app, cfg, discover)
+
+	if err := app.Bootstrap(); err != nil {
+		t.Fatalf("bootstrap against a fresh data dir failed: %v", err)
+	}
+
+	for _, name := range []string{"categories", "devices", "lending_requests"} {
+		if _, err := app.FindCollectionByNameOrId(name); err != nil {
+			t.Errorf("expected the %q collection to exist after bootstrap: %v", name, err)
+		}
+	}
+
+	users, err := app.FindCollectionByNameOrId("users")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if users.Fields.GetByName("is_admin") == nil {
+		t.Error("expected the users collection to have the is_admin field after bootstrap")
+	}
+}
 
 func TestHealthz(t *testing.T) {
 	app, err := tests.NewTestApp()

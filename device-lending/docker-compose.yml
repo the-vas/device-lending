@@ -14,7 +14,6 @@ services:
       BASE_URL: ${BASE_URL}
       SESSION_SECRET: ${SESSION_SECRET}
       PUBLIC_READ: ${PUBLIC_READ:-false}
-      HTTP_ADDR: 0.0.0.0:8090
     restart: unless-stopped
 
 volumes:

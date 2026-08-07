@@ -24,9 +24,6 @@ func TestLoad_Defaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.HTTPAddr != "0.0.0.0:8090" {
-		t.Errorf("expected default HTTPAddr, got %q", cfg.HTTPAddr)
-	}
 	if cfg.PublicRead != false {
 		t.Errorf("expected PublicRead to default to false")
 	}
@@ -42,15 +39,11 @@ func TestLoad_Overrides(t *testing.T) {
 		"OIDC_CLIENT_SECRET": "secret",
 		"BASE_URL":           "https://lending.example.com",
 		"SESSION_SECRET":     "at-least-32-bytes-of-random-secret",
-		"HTTP_ADDR":          "0.0.0.0:9000",
 		"PUBLIC_READ":        "true",
 		"OIDC_ADMIN_GROUP":   "admin",
 	}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.HTTPAddr != "0.0.0.0:9000" {
-		t.Errorf("expected overridden HTTPAddr, got %q", cfg.HTTPAddr)
 	}
 	if !cfg.PublicRead {
 		t.Errorf("expected PublicRead true")

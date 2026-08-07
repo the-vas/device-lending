@@ -7,7 +7,6 @@ import (
 )
 
 type Config struct {
-	HTTPAddr         string
 	OIDCIssuer       string
 	OIDCClientID     string
 	OIDCClientSecret string
@@ -19,7 +18,6 @@ type Config struct {
 
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
-		HTTPAddr:         orDefault(getenv("HTTP_ADDR"), "0.0.0.0:8090"),
 		OIDCIssuer:       getenv("OIDC_ISSUER"),
 		OIDCClientID:     getenv("OIDC_CLIENT_ID"),
 		OIDCClientSecret: getenv("OIDC_CLIENT_SECRET"),
@@ -60,11 +58,4 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	return cfg, nil
-}
-
-func orDefault(v, def string) string {
-	if v == "" {
-		return def
-	}
-	return v
 }

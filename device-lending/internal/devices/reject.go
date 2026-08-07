@@ -54,5 +54,7 @@ func Reject(app core.App, notifier *mail.Notifier, request *core.Record) error {
 		return fmt.Errorf("loading requester: %w", err)
 	}
 
-	return notifier.RequestRejected(requester, device)
+	logNotifyFailure(app, "request_rejected", notifier.RequestRejected(requester, device))
+
+	return nil
 }

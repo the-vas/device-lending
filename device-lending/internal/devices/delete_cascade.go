@@ -29,9 +29,7 @@ func BindDeleteCascade(app core.App, notifier *mail.Notifier) {
 				return err
 			}
 
-			if err := notifier.DeviceRemoved(requester, e.Record); err != nil {
-				return err
-			}
+			logNotifyFailure(e.App, "device_removed", notifier.DeviceRemoved(requester, e.Record))
 		}
 
 		return e.Next()
