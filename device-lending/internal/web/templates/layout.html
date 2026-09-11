@@ -19,7 +19,7 @@
       {{if .IsAdmin}}<a href="/admin">Admin</a>{{end}}
       <form action="/logout" method="post" class="inline"><button type="submit">Log out</button></form>
     {{else}}
-      <a href="/oidc/login">Log in</a>
+      <a href="{{.LoginPath}}">Log in</a>
     {{end}}
   </nav>
 </header>

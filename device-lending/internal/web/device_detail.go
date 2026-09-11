@@ -25,7 +25,7 @@ type pendingRequestView struct {
 func DeviceDetailHandler(app core.App, publicRead bool) func(e *core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
 		if !publicRead && e.Auth == nil {
-			return e.Redirect(http.StatusFound, "/oidc/login")
+			return e.Redirect(http.StatusFound, LoginPath)
 		}
 
 		id := e.Request.PathValue("id")
@@ -81,6 +81,7 @@ func DeviceDetailHandler(app core.App, publicRead bool) func(e *core.RequestEven
 			"Lat":              device.GetGeoPoint("location_point").Lat,
 			"Lon":              device.GetGeoPoint("location_point").Lon,
 			"LocationLabel":    device.GetString("location_label"),
+			"LoginPath":        LoginPath,
 		}
 
 		if isOwner || isAdmin {
@@ -124,7 +125,7 @@ func DeviceDetailHandler(app core.App, publicRead bool) func(e *core.RequestEven
 func RequestDeviceHandler(app core.App, notifier *mail.Notifier) func(e *core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
 		if e.Auth == nil {
-			return e.Redirect(http.StatusFound, "/oidc/login")
+			return e.Redirect(http.StatusFound, LoginPath)
 		}
 
 		id := e.Request.PathValue("id")
@@ -166,7 +167,7 @@ func RequestDeviceHandler(app core.App, notifier *mail.Notifier) func(e *core.Re
 func WithdrawRequestHandler(app core.App, notifier *mail.Notifier) func(e *core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
 		if e.Auth == nil {
-			return e.Redirect(http.StatusFound, "/oidc/login")
+			return e.Redirect(http.StatusFound, LoginPath)
 		}
 
 		reqID := e.Request.PathValue("reqId")

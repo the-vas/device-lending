@@ -13,6 +13,7 @@ import (
 	"github.com/the-vas/device-lending/internal/config"
 	"github.com/the-vas/device-lending/internal/devauth"
 	"github.com/the-vas/device-lending/internal/oidcdiscovery"
+	"github.com/the-vas/device-lending/internal/web"
 	"github.com/the-vas/device-lending/internal/webauth"
 )
 
@@ -213,5 +214,20 @@ func TestBindAuthRoutes_OIDC_RegistersOIDCNotDevLogin(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 	if rec.Code == http.StatusNotFound {
 		t.Fatal("expected /oidc/login route to be registered")
+	}
+}
+
+func TestConfigureLoginPath(t *testing.T) {
+	defer func() { web.LoginPath = "/oidc/login" }()
+
+	web.LoginPath = "/oidc/login"
+	configureLoginPath(config.Config{DevAuth: false})
+	if web.LoginPath != "/oidc/login" {
+		t.Errorf("expected LoginPath to stay /oidc/login when DevAuth is false, got %q", web.LoginPath)
+	}
+
+	configureLoginPath(config.Config{DevAuth: true})
+	if web.LoginPath != "/dev/login" {
+		t.Errorf("expected LoginPath to become /dev/login when DevAuth is true, got %q", web.LoginPath)
 	}
 }

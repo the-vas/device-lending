@@ -51,7 +51,7 @@ func bindDeviceForm(e *core.RequestEvent, record *core.Record) error {
 func NewDeviceFormHandler(app core.App) func(e *core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
 		if e.Auth == nil {
-			return e.Redirect(http.StatusFound, "/oidc/login")
+			return e.Redirect(http.StatusFound, LoginPath)
 		}
 
 		categories, err := loadCategories(app)
@@ -66,6 +66,7 @@ func NewDeviceFormHandler(app core.App) func(e *core.RequestEvent) error {
 			"Categories":  categories,
 			"Device":      nil,
 			"IsEdit":      false,
+			"LoginPath":   LoginPath,
 		})
 		if err != nil {
 			return e.InternalServerError("failed to render page", err)
@@ -77,7 +78,7 @@ func NewDeviceFormHandler(app core.App) func(e *core.RequestEvent) error {
 func CreateDeviceHandler(app core.App) func(e *core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
 		if e.Auth == nil {
-			return e.Redirect(http.StatusFound, "/oidc/login")
+			return e.Redirect(http.StatusFound, LoginPath)
 		}
 
 		collection, err := app.FindCollectionByNameOrId("devices")
@@ -103,7 +104,7 @@ func CreateDeviceHandler(app core.App) func(e *core.RequestEvent) error {
 func EditDeviceFormHandler(app core.App) func(e *core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
 		if e.Auth == nil {
-			return e.Redirect(http.StatusFound, "/oidc/login")
+			return e.Redirect(http.StatusFound, LoginPath)
 		}
 
 		device, err := app.FindRecordById("devices", e.Request.PathValue("id"))
@@ -126,6 +127,7 @@ func EditDeviceFormHandler(app core.App) func(e *core.RequestEvent) error {
 			"Categories":  categories,
 			"Device":      device,
 			"IsEdit":      true,
+			"LoginPath":   LoginPath,
 		})
 		if err != nil {
 			return e.InternalServerError("failed to render page", err)
@@ -137,7 +139,7 @@ func EditDeviceFormHandler(app core.App) func(e *core.RequestEvent) error {
 func UpdateDeviceHandler(app core.App) func(e *core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
 		if e.Auth == nil {
-			return e.Redirect(http.StatusFound, "/oidc/login")
+			return e.Redirect(http.StatusFound, LoginPath)
 		}
 
 		device, err := app.FindRecordById("devices", e.Request.PathValue("id"))

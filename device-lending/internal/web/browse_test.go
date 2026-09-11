@@ -130,3 +130,29 @@ func TestBrowseHandler_RequiresAuthWhenNotPublic(t *testing.T) {
 		t.Errorf("expected redirect to /oidc/login, got %s", rec.Header().Get("Location"))
 	}
 }
+
+func TestBrowseHandler_RedirectsToConfiguredLoginPath(t *testing.T) {
+	defer func() { web.LoginPath = "/oidc/login" }()
+	web.LoginPath = "/dev/login"
+
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+
+	mux := buildMux(t, app, func(e *core.ServeEvent) {
+		e.Router.GET("/", web.BrowseHandler(app, false))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected 302 redirect to login, got %d", rec.Code)
+	}
+	if rec.Header().Get("Location") != "/dev/login" {
+		t.Errorf("expected redirect to /dev/login, got %s", rec.Header().Get("Location"))
+	}
+}

@@ -81,11 +81,22 @@ func bindAuthRoutes(r *router.Router[*core.RequestEvent], cfg config.Config, sig
 	r.GET("/oidc/callback", webauth.CallbackHandler(cfg.BaseURL, signer, webauth.RouterExchanger))
 }
 
+// configureLoginPath points web.LoginPath at whichever login route is
+// actually registered for this boot — /dev/login under DevAuth, the real
+// OIDC login otherwise — so every in-app redirect and the header's "Log in"
+// link never point at a route that doesn't exist.
+func configureLoginPath(cfg config.Config) {
+	if cfg.DevAuth {
+		web.LoginPath = "/dev/login"
+	}
+}
+
 func main() {
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
 		log.Fatalf("configuration error: %v", err)
 	}
+	configureLoginPath(cfg)
 
 	app := pocketbase.New()
 
