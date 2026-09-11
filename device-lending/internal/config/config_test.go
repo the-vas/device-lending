@@ -65,3 +65,63 @@ func TestLoad_ShortSessionSecretRejected(t *testing.T) {
 		t.Fatal("expected error for a SESSION_SECRET shorter than 32 characters")
 	}
 }
+
+func TestLoad_DevAuthSkipsOIDCRequirement(t *testing.T) {
+	cfg, err := Load(envMap(map[string]string{
+		"DEV_AUTH":       "true",
+		"BASE_URL":       "http://localhost:8090",
+		"SESSION_SECRET": "at-least-32-bytes-of-random-secret",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.DevAuth {
+		t.Error("expected DevAuth to be true")
+	}
+}
+
+func TestLoad_DevAuthAcceptsLoopbackIP(t *testing.T) {
+	cfg, err := Load(envMap(map[string]string{
+		"DEV_AUTH":       "true",
+		"BASE_URL":       "http://127.0.0.1:8090",
+		"SESSION_SECRET": "at-least-32-bytes-of-random-secret",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.DevAuth {
+		t.Error("expected DevAuth to be true")
+	}
+}
+
+func TestLoad_DevAuthRejectsNonLocalBaseURL(t *testing.T) {
+	_, err := Load(envMap(map[string]string{
+		"DEV_AUTH":       "true",
+		"BASE_URL":       "https://lending.example.com",
+		"SESSION_SECRET": "at-least-32-bytes-of-random-secret",
+	}))
+	if err == nil {
+		t.Fatal("expected error for DEV_AUTH=true with a non-localhost BASE_URL")
+	}
+}
+
+func TestLoad_DevAuthRejectsHTTPSBaseURL(t *testing.T) {
+	_, err := Load(envMap(map[string]string{
+		"DEV_AUTH":       "true",
+		"BASE_URL":       "https://localhost:8090",
+		"SESSION_SECRET": "at-least-32-bytes-of-random-secret",
+	}))
+	if err == nil {
+		t.Fatal("expected error for DEV_AUTH=true with an https:// BASE_URL")
+	}
+}
+
+func TestLoad_DevAuthFalseStillRequiresOIDC(t *testing.T) {
+	_, err := Load(envMap(map[string]string{
+		"BASE_URL":       "http://localhost:8090",
+		"SESSION_SECRET": "at-least-32-bytes-of-random-secret",
+	}))
+	if err == nil {
+		t.Fatal("expected error: DEV_AUTH defaults to false, so OIDC vars are still required")
+	}
+}

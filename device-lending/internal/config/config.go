@@ -1,7 +1,9 @@
+// internal/config/config.go
 package config
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -14,6 +16,7 @@ type Config struct {
 	PublicRead       bool
 	BaseURL          string
 	SessionSecret    string
+	DevAuth          bool
 }
 
 func Load(getenv func(string) string) (Config, error) {
@@ -34,15 +37,25 @@ func Load(getenv func(string) string) (Config, error) {
 		cfg.PublicRead = b
 	}
 
+	if v := getenv("DEV_AUTH"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return Config{}, fmt.Errorf("invalid DEV_AUTH value %q: %w", v, err)
+		}
+		cfg.DevAuth = b
+	}
+
 	var missing []string
-	if cfg.OIDCIssuer == "" {
-		missing = append(missing, "OIDC_ISSUER")
-	}
-	if cfg.OIDCClientID == "" {
-		missing = append(missing, "OIDC_CLIENT_ID")
-	}
-	if cfg.OIDCClientSecret == "" {
-		missing = append(missing, "OIDC_CLIENT_SECRET")
+	if !cfg.DevAuth {
+		if cfg.OIDCIssuer == "" {
+			missing = append(missing, "OIDC_ISSUER")
+		}
+		if cfg.OIDCClientID == "" {
+			missing = append(missing, "OIDC_CLIENT_ID")
+		}
+		if cfg.OIDCClientSecret == "" {
+			missing = append(missing, "OIDC_CLIENT_SECRET")
+		}
 	}
 	if cfg.BaseURL == "" {
 		missing = append(missing, "BASE_URL")
@@ -57,5 +70,29 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("SESSION_SECRET must be at least 32 characters, got %d", len(cfg.SessionSecret))
 	}
 
+	if cfg.DevAuth {
+		if err := requireLocalBaseURL(cfg.BaseURL); err != nil {
+			return Config{}, err
+		}
+	}
+
 	return cfg, nil
+}
+
+// requireLocalBaseURL enforces that DEV_AUTH=true can only ever boot against
+// a plain-http localhost/127.0.0.1 BASE_URL, so this dev-only auth bypass can
+// never activate in a real deployment.
+func requireLocalBaseURL(baseURL string) error {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return fmt.Errorf("DEV_AUTH=true requires a valid BASE_URL: %w", err)
+	}
+	if u.Scheme != "http" {
+		return fmt.Errorf("DEV_AUTH=true requires BASE_URL to use http, got scheme %q", u.Scheme)
+	}
+	host := u.Hostname()
+	if host != "localhost" && host != "127.0.0.1" {
+		return fmt.Errorf("DEV_AUTH=true requires BASE_URL host to be localhost or 127.0.0.1, got %q", host)
+	}
+	return nil
 }
