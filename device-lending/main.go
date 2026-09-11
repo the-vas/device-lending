@@ -10,9 +10,11 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
+	"github.com/pocketbase/pocketbase/tools/router"
 
 	"github.com/the-vas/device-lending/internal/authsetup"
 	"github.com/the-vas/device-lending/internal/config"
+	"github.com/the-vas/device-lending/internal/devauth"
 	"github.com/the-vas/device-lending/internal/devices"
 	"github.com/the-vas/device-lending/internal/mail"
 	"github.com/the-vas/device-lending/internal/oidcdiscovery"
@@ -49,12 +51,34 @@ func bindBootstrap(
 			return err
 		}
 
-		if err := authsetup.ConfigureOAuth2(e.App, cfg, discover); err != nil {
-			return err
+		if cfg.DevAuth {
+			if err := devauth.Setup(e.App); err != nil {
+				return err
+			}
+		} else {
+			if err := authsetup.ConfigureOAuth2(e.App, cfg, discover); err != nil {
+				return err
+			}
+			authsetup.BindAdminSync(e.App, cfg.OIDCAdminGroup)
 		}
-		authsetup.BindAdminSync(e.App, cfg.OIDCAdminGroup)
 		return authsetup.ApplyReadRules(e.App, cfg.PublicRead)
 	})
+}
+
+// bindAuthRoutes registers either the dev-mode password-login routes or the
+// real OIDC login/callback routes, mutually exclusively, depending on
+// cfg.DevAuth. Kept as its own function (rather than inline in main) so
+// route registration can be exercised directly in tests without booting a
+// real server.
+func bindAuthRoutes(r *router.Router[*core.RequestEvent], cfg config.Config, signer webauth.Signer) {
+	if cfg.DevAuth {
+		r.GET("/dev/login", devauth.LoginPageHandler())
+		r.POST("/dev/login/user", devauth.LoginAsHandler(devauth.UserEmail, devauth.UserPassword, signer))
+		r.POST("/dev/login/admin", devauth.LoginAsHandler(devauth.AdminEmail, devauth.AdminPassword, signer))
+		return
+	}
+	r.GET("/oidc/login", webauth.LoginHandler(cfg.BaseURL, signer))
+	r.GET("/oidc/callback", webauth.CallbackHandler(cfg.BaseURL, signer, webauth.RouterExchanger))
 }
 
 func main() {
@@ -94,8 +118,7 @@ func main() {
 		})
 		se.Router.GET("/static/{path...}", apis.Static(staticSub, false))
 
-		se.Router.GET("/oidc/login", webauth.LoginHandler(cfg.BaseURL, signer))
-		se.Router.GET("/oidc/callback", webauth.CallbackHandler(cfg.BaseURL, signer, webauth.RouterExchanger))
+		bindAuthRoutes(se.Router, cfg, signer)
 		se.Router.POST("/logout", webauth.LogoutHandler())
 
 		se.Router.GET("/", web.BrowseHandler(app, cfg.PublicRead))
