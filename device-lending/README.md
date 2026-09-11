@@ -34,6 +34,7 @@ Copy `.env.example` to `.env` and fill in:
 | `BASE_URL` | yes | Public URL this app is reachable at, no trailing slash — must be `https://` in any real deployment, see below |
 | `SESSION_SECRET` | yes | Random string, 32+ characters, used to sign session cookies |
 | `PUBLIC_READ` | no (default `false`) | `true` to let anyone browse/view devices without logging in; requesting a device always requires login regardless |
+| `DEV_AUTH` | no (default `false`) | `true` to skip OIDC entirely for local development — see "Local development without OIDC" below |
 
 ### HTTPS is required
 
@@ -48,6 +49,33 @@ Terminate TLS in front of the container (reverse proxy, ingress, tunnel) and
 point `BASE_URL` at that public HTTPS address. `http://localhost:8090` is fine
 for local development only, because browsers treat `localhost` as a secure
 context.
+
+## Local development without OIDC
+
+For running the app on your own machine with no OIDC provider at all, set
+`DEV_AUTH=true`. This swaps the entire OIDC login flow for two fixed,
+pre-seeded PocketBase accounts you log into with one click:
+
+```bash
+DEV_AUTH=true
+BASE_URL=http://localhost:8090
+SESSION_SECRET=<any 32+ character string>
+```
+
+`OIDC_ISSUER`/`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET` are not required in this
+mode. Boot the app, then visit `${BASE_URL}/dev/login` and click "Log in as
+regular user" or "Log in as admin" — no credentials to type, no provider to
+register with.
+
+**This is enforced to be local-only.** `DEV_AUTH=true` requires `BASE_URL` to
+be `http://localhost...` or `http://127.0.0.1...` — the app refuses to boot
+under `DEV_AUTH=true` with any other `BASE_URL`, so this cannot accidentally
+end up active in a real deployment. Never set `DEV_AUTH=true` anywhere other
+than your own machine.
+
+The two seeded accounts let you exercise both `is_admin` code paths (e.g. the
+`/admin` cleanup view, edit/delete permissions) without needing a real OIDC
+group claim.
 
 ## Running with Docker Compose
 
