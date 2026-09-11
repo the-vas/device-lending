@@ -1053,3 +1053,370 @@ group claim.
 git add README.md
 git commit -m "Document DEV_AUTH local-development mode"
 ```
+
+---
+
+## Task 6: Make every in-app login redirect and link honor `DEV_AUTH`
+
+**Added after Task 4's implementation surfaced a real gap in this plan:** every unauthenticated-redirect across `internal/web`, and the header template's "Log in" link, hardcode the literal `/oidc/login`. That route doesn't exist when `DEV_AUTH=true` (Task 4 only wired `/dev/login`), so an unauthenticated visitor hitting any protected page — which happens immediately under the default `PUBLIC_READ=false` — gets redirected into a dead route instead of `/dev/login`. This task fixes that so dev-auth mode is actually click-through-usable, not just reachable by typing `/dev/login` manually.
+
+**Files:**
+- Create: `device-lending/internal/web/loginpath.go`
+- Modify: `device-lending/internal/web/browse.go`
+- Modify: `device-lending/internal/web/my_pages.go`
+- Modify: `device-lending/internal/web/device_detail.go`
+- Modify: `device-lending/internal/web/device_form.go`
+- Modify: `device-lending/internal/web/admin.go`
+- Modify: `device-lending/internal/web/owner_actions.go`
+- Modify: `device-lending/internal/web/templates/layout.html`
+- Modify: `device-lending/internal/web/templates_test.go`
+- Test: `device-lending/internal/web/browse_test.go` (add a test; existing tests in this file are otherwise unaffected)
+- Modify: `device-lending/main.go`
+- Modify: `device-lending/main_test.go`
+
+**Interfaces:**
+- Produces: `web.LoginPath string` (package-level var, default `"/oidc/login"`) — the single source of truth for where unauthenticated visitors get sent, read by every redirect call site and by every template's `{{.LoginPath}}`. `main.configureLoginPath(cfg config.Config)` sets it to `"/dev/login"` when `cfg.DevAuth` is true, called once from `main()` right after config loads, before anything starts serving.
+- Consumes: nothing new from earlier tasks beyond `config.Config.DevAuth` (Task 1).
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `internal/web/templates_test.go`:
+
+```go
+func TestRender_LayoutHonorsConfiguredLoginPath(t *testing.T) {
+	defer func() { web.LoginPath = "/oidc/login" }()
+	web.LoginPath = "/dev/login"
+
+	html, err := web.Render(nil, map[string]any{
+		"Title":       "Browse",
+		"CurrentUser": nil,
+		"IsAdmin":     false,
+		"LoginPath":   web.LoginPath,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(html, `href="/dev/login"`) {
+		t.Error("expected anonymous nav to link to the configured LoginPath")
+	}
+}
+```
+
+Append to `internal/web/browse_test.go`:
+
+```go
+func TestBrowseHandler_RedirectsToConfiguredLoginPath(t *testing.T) {
+	defer func() { web.LoginPath = "/oidc/login" }()
+	web.LoginPath = "/dev/login"
+
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+
+	mux := buildMux(t, app, func(e *core.ServeEvent) {
+		e.Router.GET("/", web.BrowseHandler(app, false))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected 302 redirect to login, got %d", rec.Code)
+	}
+	if rec.Header().Get("Location") != "/dev/login" {
+		t.Errorf("expected redirect to /dev/login, got %s", rec.Header().Get("Location"))
+	}
+}
+```
+
+Append to `main_test.go` (add `"github.com/the-vas/device-lending/internal/web"` to its imports):
+
+```go
+func TestConfigureLoginPath(t *testing.T) {
+	defer func() { web.LoginPath = "/oidc/login" }()
+
+	web.LoginPath = "/oidc/login"
+	configureLoginPath(config.Config{DevAuth: false})
+	if web.LoginPath != "/oidc/login" {
+		t.Errorf("expected LoginPath to stay /oidc/login when DevAuth is false, got %q", web.LoginPath)
+	}
+
+	configureLoginPath(config.Config{DevAuth: true})
+	if web.LoginPath != "/dev/login" {
+		t.Errorf("expected LoginPath to become /dev/login when DevAuth is true, got %q", web.LoginPath)
+	}
+}
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `go test ./internal/web/... . -v`
+Expected: FAIL — `TestRender_LayoutHonorsConfiguredLoginPath` and `TestBrowseHandler_RedirectsToConfiguredLoginPath` fail because the layout and `BrowseHandler` still hardcode `/oidc/login`; `TestConfigureLoginPath` fails to compile (`undefined: configureLoginPath`, `undefined: web.LoginPath`).
+
+- [ ] **Step 3: Create the shared LoginPath var**
+
+```go
+// internal/web/loginpath.go
+package web
+
+// LoginPath is the path unauthenticated visitors are redirected to, and what
+// the layout template renders as the "Log in" link. Defaults to the real
+// OIDC login route; main.go overrides it to "/dev/login" when DEV_AUTH is
+// enabled. Set once at boot before the app starts serving — never mutated
+// while requests are in flight, so no synchronization is needed.
+var LoginPath = "/oidc/login"
+```
+
+- [ ] **Step 4: Point every redirect at `LoginPath` instead of the literal**
+
+In `internal/web/browse.go`, replace:
+
+```go
+		if !publicRead && e.Auth == nil {
+			return e.Redirect(http.StatusFound, "/oidc/login")
+		}
+```
+
+with:
+
+```go
+		if !publicRead && e.Auth == nil {
+			return e.Redirect(http.StatusFound, LoginPath)
+		}
+```
+
+In `internal/web/my_pages.go`, replace both occurrences of:
+
+```go
+		if e.Auth == nil {
+			return e.Redirect(http.StatusFound, "/oidc/login")
+		}
+```
+
+with:
+
+```go
+		if e.Auth == nil {
+			return e.Redirect(http.StatusFound, LoginPath)
+		}
+```
+
+(one inside `MyDevicesHandler`, one inside `MyRequestsHandler` — both have this exact 3-line shape).
+
+In `internal/web/device_detail.go`, replace the occurrence inside `DeviceDetailHandler`:
+
+```go
+		if !publicRead && e.Auth == nil {
+			return e.Redirect(http.StatusFound, "/oidc/login")
+		}
+```
+
+with:
+
+```go
+		if !publicRead && e.Auth == nil {
+			return e.Redirect(http.StatusFound, LoginPath)
+		}
+```
+
+and replace both occurrences inside `RequestDeviceHandler` and `WithdrawRequestHandler`:
+
+```go
+		if e.Auth == nil {
+			return e.Redirect(http.StatusFound, "/oidc/login")
+		}
+```
+
+with:
+
+```go
+		if e.Auth == nil {
+			return e.Redirect(http.StatusFound, LoginPath)
+		}
+```
+
+In `internal/web/device_form.go`, replace all four occurrences of:
+
+```go
+		if e.Auth == nil {
+			return e.Redirect(http.StatusFound, "/oidc/login")
+		}
+```
+
+with:
+
+```go
+		if e.Auth == nil {
+			return e.Redirect(http.StatusFound, LoginPath)
+		}
+```
+
+(one each inside `NewDeviceFormHandler`, `CreateDeviceHandler`, `EditDeviceFormHandler`, `UpdateDeviceHandler`).
+
+In `internal/web/admin.go`, replace inside `requireAdmin`:
+
+```go
+func requireAdmin(e *core.RequestEvent) error {
+	if e.Auth == nil {
+		return e.Redirect(http.StatusFound, "/oidc/login")
+	}
+```
+
+with:
+
+```go
+func requireAdmin(e *core.RequestEvent) error {
+	if e.Auth == nil {
+		return e.Redirect(http.StatusFound, LoginPath)
+	}
+```
+
+In `internal/web/owner_actions.go`, replace inside `requireOwnerOrAdmin`:
+
+```go
+func requireOwnerOrAdmin(e *core.RequestEvent, device *core.Record) error {
+	if e.Auth == nil {
+		return e.Redirect(http.StatusFound, "/oidc/login")
+	}
+```
+
+with:
+
+```go
+func requireOwnerOrAdmin(e *core.RequestEvent, device *core.Record) error {
+	if e.Auth == nil {
+		return e.Redirect(http.StatusFound, LoginPath)
+	}
+```
+
+- [ ] **Step 5: Thread `LoginPath` into every template's data**
+
+In `internal/web/browse.go`, in the `Render` call inside `BrowseHandler`, add a `"LoginPath"` key:
+
+```go
+		html, err := Render([]string{"templates/index.html"}, map[string]any{
+			"Title":       "Browse",
+			"CurrentUser": e.Auth,
+			"IsAdmin":     isAdmin,
+			"Devices":     items,
+			"Query":       q,
+			"LoginPath":   LoginPath,
+		})
+```
+
+In `internal/web/my_pages.go`, add `"LoginPath": LoginPath,` to both `Render` call maps (inside `MyDevicesHandler` and `MyRequestsHandler`), e.g. the first becomes:
+
+```go
+		html, err := Render([]string{"templates/my_devices.html"}, map[string]any{
+			"Title":       "My devices",
+			"CurrentUser": e.Auth,
+			"IsAdmin":     e.Auth.GetBool("is_admin"),
+			"Devices":     items,
+			"LoginPath":   LoginPath,
+		})
+```
+
+and the second (in `MyRequestsHandler`) the same way with its existing `"Requests"` key left in place.
+
+In `internal/web/device_detail.go`, add `"LoginPath": LoginPath,` to the `data := map[string]any{...}` literal inside `DeviceDetailHandler` (the one later passed to `Render([]string{"templates/device_detail.html"}, data)`), alongside its existing `"Title"`/`"CurrentUser"`/etc. keys.
+
+In `internal/web/device_form.go`, add `"LoginPath": LoginPath,` to both `Render` call maps (inside `NewDeviceFormHandler` and `EditDeviceFormHandler`), alongside their existing `"Title"`/`"Categories"`/etc. keys.
+
+In `internal/web/admin.go`, add `"LoginPath": LoginPath,` to the `Render` call map inside `AdminHandler`, alongside its existing keys.
+
+- [ ] **Step 6: Update the layout template**
+
+In `internal/web/templates/layout.html`, replace:
+
+```html
+      <a href="/oidc/login">Log in</a>
+```
+
+with:
+
+```html
+      <a href="{{.LoginPath}}">Log in</a>
+```
+
+- [ ] **Step 7: Fix the pre-existing template test for the new required map key**
+
+In `internal/web/templates_test.go`, `TestRender_LayoutWithContent`'s call to `web.Render` currently omits `"LoginPath"`. Add it so the test keeps asserting real behavior instead of a template rendering `<no value>`:
+
+```go
+	html, err := web.Render(nil, map[string]any{
+		"Title":       "Browse",
+		"CurrentUser": nil,
+		"IsAdmin":     false,
+		"LoginPath":   "/oidc/login",
+	})
+```
+
+(only the map literal changes; the rest of the test function is unchanged).
+
+- [ ] **Step 8: Add `configureLoginPath` and call it from `main`**
+
+In `main.go`, add this function directly after the `bindAuthRoutes` function (before `func main()`):
+
+```go
+// configureLoginPath points web.LoginPath at whichever login route is
+// actually registered for this boot — /dev/login under DevAuth, the real
+// OIDC login otherwise — so every in-app redirect and the header's "Log in"
+// link never point at a route that doesn't exist.
+func configureLoginPath(cfg config.Config) {
+	if cfg.DevAuth {
+		web.LoginPath = "/dev/login"
+	}
+}
+```
+
+In `main.go`'s `func main()`, replace:
+
+```go
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		log.Fatalf("configuration error: %v", err)
+	}
+
+	app := pocketbase.New()
+```
+
+with:
+
+```go
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		log.Fatalf("configuration error: %v", err)
+	}
+	configureLoginPath(cfg)
+
+	app := pocketbase.New()
+```
+
+- [ ] **Step 9: Run tests to verify they pass**
+
+Run: `go test ./internal/web/... . -v`
+Expected: PASS — all three new tests, plus the fixed `TestRender_LayoutWithContent`, plus every pre-existing test in `internal/web` and the root package (none of which changed behavior, since `LoginPath`'s default is still `"/oidc/login"`).
+
+- [ ] **Step 10: Run the full build and test suite**
+
+Run: `go build ./... && go test ./...`
+Expected: PASS
+
+- [ ] **Step 11: Manually verify the redirect loop is actually fixed**
+
+```bash
+DEV_AUTH=true BASE_URL=http://localhost:8092 SESSION_SECRET=at-least-32-bytes-of-random-secret go run . serve --http=127.0.0.1:8092 &
+sleep 1
+curl -s -i http://127.0.0.1:8092/ | head -5    # expect: 302 Found, Location: /dev/login (NOT /oidc/login, NOT another 302 loop)
+kill %1
+```
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add internal/web/loginpath.go internal/web/browse.go internal/web/my_pages.go internal/web/device_detail.go internal/web/device_form.go internal/web/admin.go internal/web/owner_actions.go internal/web/templates/layout.html internal/web/templates_test.go internal/web/browse_test.go main.go main_test.go
+git commit -m "Point every login redirect and link at the active auth mode's login route"
+```
