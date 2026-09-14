@@ -18,6 +18,7 @@ func TestRender_LayoutWithContent(t *testing.T) {
 		"Title":       "Browse",
 		"CurrentUser": nil,
 		"IsAdmin":     false,
+		"LoginPath":   "/oidc/login",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -30,5 +31,23 @@ func TestRender_LayoutWithContent(t *testing.T) {
 	}
 	if strings.Contains(html, "/my/devices") {
 		t.Error("expected anonymous nav to NOT show 'My devices'")
+	}
+}
+
+func TestRender_LayoutHonorsConfiguredLoginPath(t *testing.T) {
+	defer func() { web.LoginPath = "/oidc/login" }()
+	web.LoginPath = "/dev/login"
+
+	html, err := web.Render(nil, map[string]any{
+		"Title":       "Browse",
+		"CurrentUser": nil,
+		"IsAdmin":     false,
+		"LoginPath":   web.LoginPath,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(html, `href="/dev/login"`) {
+		t.Error("expected anonymous nav to link to the configured LoginPath")
 	}
 }

@@ -1,0 +1,16 @@
+# docker-compose.yml
+services:
+  device-lending:
+    build: .
+    ports:
+      - "8090:8090"
+    volumes:
+      - pb_data:/app/pb_data
+    environment:
+      BASE_URL: http://127.0.0.1
+      SESSION_SECRET: ${SESSION_SECRET}
+      PUBLIC_READ: ${PUBLIC_READ:-false}
+    restart: unless-stopped
+
+volumes:
+  pb_data:

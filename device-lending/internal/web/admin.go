@@ -9,7 +9,7 @@ import (
 
 func requireAdmin(e *core.RequestEvent) error {
 	if e.Auth == nil {
-		return e.Redirect(http.StatusFound, "/oidc/login")
+		return e.Redirect(http.StatusFound, LoginPath)
 	}
 	if !e.Auth.GetBool("is_admin") {
 		return e.ForbiddenError("admin only", nil)
@@ -38,6 +38,7 @@ func AdminHandler(app core.App) func(e *core.RequestEvent) error {
 			"IsAdmin":     true,
 			"Devices":     devicesRecords,
 			"Requests":    requestsRecords,
+			"LoginPath":   LoginPath,
 		})
 		if err != nil {
 			return e.InternalServerError("failed to render page", err)

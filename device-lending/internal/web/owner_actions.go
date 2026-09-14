@@ -12,7 +12,7 @@ import (
 
 func requireOwnerOrAdmin(e *core.RequestEvent, device *core.Record) error {
 	if e.Auth == nil {
-		return e.Redirect(http.StatusFound, "/oidc/login")
+		return e.Redirect(http.StatusFound, LoginPath)
 	}
 	if device.GetString("owner") != e.Auth.Id && !e.Auth.GetBool("is_admin") {
 		return e.ForbiddenError("not your device", nil)

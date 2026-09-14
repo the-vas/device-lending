@@ -11,7 +11,10 @@ import (
 	"github.com/pocketbase/pocketbase/tests"
 
 	"github.com/the-vas/device-lending/internal/config"
+	"github.com/the-vas/device-lending/internal/devauth"
 	"github.com/the-vas/device-lending/internal/oidcdiscovery"
+	"github.com/the-vas/device-lending/internal/web"
+	"github.com/the-vas/device-lending/internal/webauth"
 )
 
 // TestBootstrap_FreshDataDir boots the app's real OnBootstrap chain against a
@@ -96,5 +99,135 @@ func TestHealthz(t *testing.T) {
 	}
 	if rec.Body.String() != "ok" {
 		t.Fatalf("expected body 'ok', got %q", rec.Body.String())
+	}
+}
+
+func TestBootstrap_DevAuth_SkipsOIDCAndSeedsUsers(t *testing.T) {
+	app := core.NewBaseApp(core.BaseAppConfig{DataDir: t.TempDir()})
+	defer app.ResetBootstrapState() //nolint:errcheck // best-effort test cleanup
+
+	cfg := config.Config{
+		DevAuth:       true,
+		BaseURL:       "http://localhost:8090",
+		SessionSecret: "at-least-32-bytes-of-random-secret",
+	}
+
+	discover := func(ctx context.Context, issuer string) (oidcdiscovery.Document, error) {
+		t.Fatal("OIDC discovery must not be called when DevAuth is true")
+		return oidcdiscovery.Document{}, nil
+	}
+
+	bindBootstrap(app, cfg, discover)
+
+	if err := app.Bootstrap(); err != nil {
+		t.Fatalf("bootstrap under DevAuth failed: %v", err)
+	}
+
+	users, err := app.FindCollectionByNameOrId("users")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !users.PasswordAuth.Enabled {
+		t.Error("expected password auth to be enabled under DevAuth")
+	}
+	if _, err := app.FindAuthRecordByEmail(users, devauth.UserEmail); err != nil {
+		t.Errorf("expected seeded dev user to exist: %v", err)
+	}
+}
+
+func assertRouteStatus(t *testing.T, mux http.Handler, method, path string, want int) {
+	t.Helper()
+	req := httptest.NewRequest(method, path, nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != want {
+		t.Fatalf("%s %s: expected status %d, got %d", method, path, want, rec.Code)
+	}
+}
+
+func TestBindAuthRoutes_DevAuth_RegistersDevLoginNotOIDC(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+
+	router, err := apis.NewRouter(app)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.Config{DevAuth: true, BaseURL: "http://localhost:8090", SessionSecret: "at-least-32-bytes-of-random-secret"}
+	signer := webauth.NewSigner(cfg.SessionSecret)
+
+	serveEvent := &core.ServeEvent{App: app, Router: router}
+	err = app.OnServe().Trigger(serveEvent, func(e *core.ServeEvent) error {
+		bindAuthRoutes(e.Router, cfg, signer)
+		return e.Next()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mux, err := router.BuildMux()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertRouteStatus(t, mux, http.MethodGet, "/dev/login", http.StatusOK)
+	assertRouteStatus(t, mux, http.MethodGet, "/oidc/login", http.StatusNotFound)
+}
+
+func TestBindAuthRoutes_OIDC_RegistersOIDCNotDevLogin(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+
+	router, err := apis.NewRouter(app)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.Config{BaseURL: "https://lending.example.com", SessionSecret: "at-least-32-bytes-of-random-secret"}
+	signer := webauth.NewSigner(cfg.SessionSecret)
+
+	serveEvent := &core.ServeEvent{App: app, Router: router}
+	err = app.OnServe().Trigger(serveEvent, func(e *core.ServeEvent) error {
+		bindAuthRoutes(e.Router, cfg, signer)
+		return e.Next()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mux, err := router.BuildMux()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertRouteStatus(t, mux, http.MethodGet, "/dev/login", http.StatusNotFound)
+
+	req := httptest.NewRequest(http.MethodGet, "/oidc/login", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code == http.StatusNotFound {
+		t.Fatal("expected /oidc/login route to be registered")
+	}
+}
+
+func TestConfigureLoginPath(t *testing.T) {
+	defer func() { web.LoginPath = "/oidc/login" }()
+
+	web.LoginPath = "/oidc/login"
+	configureLoginPath(config.Config{DevAuth: false})
+	if web.LoginPath != "/oidc/login" {
+		t.Errorf("expected LoginPath to stay /oidc/login when DevAuth is false, got %q", web.LoginPath)
+	}
+
+	configureLoginPath(config.Config{DevAuth: true})
+	if web.LoginPath != "/dev/login" {
+		t.Errorf("expected LoginPath to become /dev/login when DevAuth is true, got %q", web.LoginPath)
 	}
 }

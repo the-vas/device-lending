@@ -18,7 +18,7 @@ type myDeviceItem struct {
 func MyDevicesHandler(app core.App) func(e *core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
 		if e.Auth == nil {
-			return e.Redirect(http.StatusFound, "/oidc/login")
+			return e.Redirect(http.StatusFound, LoginPath)
 		}
 
 		records, err := app.FindRecordsByFilter("devices", "owner = {:owner}", "name", 0, 0, dbx.Params{"owner": e.Auth.Id})
@@ -45,6 +45,7 @@ func MyDevicesHandler(app core.App) func(e *core.RequestEvent) error {
 			"CurrentUser": e.Auth,
 			"IsAdmin":     e.Auth.GetBool("is_admin"),
 			"Devices":     items,
+			"LoginPath":   LoginPath,
 		})
 		if err != nil {
 			return e.InternalServerError("failed to render page", err)
@@ -63,7 +64,7 @@ type myRequestItem struct {
 func MyRequestsHandler(app core.App) func(e *core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
 		if e.Auth == nil {
-			return e.Redirect(http.StatusFound, "/oidc/login")
+			return e.Redirect(http.StatusFound, LoginPath)
 		}
 
 		records, err := app.FindRecordsByFilter("lending_requests", "requester = {:r}", "-created", 0, 0, dbx.Params{"r": e.Auth.Id})
@@ -85,6 +86,7 @@ func MyRequestsHandler(app core.App) func(e *core.RequestEvent) error {
 			"CurrentUser": e.Auth,
 			"IsAdmin":     e.Auth.GetBool("is_admin"),
 			"Requests":    items,
+			"LoginPath":   LoginPath,
 		})
 		if err != nil {
 			return e.InternalServerError("failed to render page", err)

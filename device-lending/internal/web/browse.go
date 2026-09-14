@@ -29,7 +29,7 @@ func devicePhotoURL(r *core.Record) string {
 func BrowseHandler(app core.App, publicRead bool) func(e *core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
 		if !publicRead && e.Auth == nil {
-			return e.Redirect(http.StatusFound, "/oidc/login")
+			return e.Redirect(http.StatusFound, LoginPath)
 		}
 
 		q := strings.TrimSpace(e.Request.URL.Query().Get("q"))
@@ -64,6 +64,7 @@ func BrowseHandler(app core.App, publicRead bool) func(e *core.RequestEvent) err
 			"IsAdmin":     isAdmin,
 			"Devices":     items,
 			"Query":       q,
+			"LoginPath":   LoginPath,
 		})
 		if err != nil {
 			return e.InternalServerError("failed to render page", err)
