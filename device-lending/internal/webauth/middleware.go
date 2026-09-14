@@ -12,6 +12,17 @@ import (
 // templates can tell who's logged in. Never blocks the request.
 func LoadSession(signer Signer) func(e *core.RequestEvent) error {
 	return func(e *core.RequestEvent) error {
+		if e.Auth != nil {
+			// PocketBase's own Authorization-header auth (used by the admin
+			// UI/API and any bearer-token client) runs before this middleware
+			// and already resolved a record — e.g. a _superusers session.
+			// Our cookie is a fallback for browser page loads only; it must
+			// never override auth that's already been resolved, or a
+			// lingering pb_session cookie from this app silently hijacks
+			// unrelated PocketBase admin requests in the same browser.
+			return e.Next()
+		}
+
 		cookie, err := e.Request.Cookie(SessionCookieName)
 		if err != nil {
 			return e.Next()

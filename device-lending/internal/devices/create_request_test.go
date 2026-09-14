@@ -1,6 +1,7 @@
 package devices_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/tests"
@@ -46,6 +47,63 @@ func TestCreateRequest_AvailableDeviceBecomesRequested(t *testing.T) {
 	}
 	if app.TestMailer.LastMessage().To[0].Address != owner.Email() {
 		t.Errorf("expected email to owner")
+	}
+}
+
+func TestCreateRequest_RejectsEndBeforeStart(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+
+	owner := newUser(t, app, "owner@example.com")
+	requester := newUser(t, app, "requester@example.com")
+	device := newDevice(t, app, owner, "Drill", "available")
+	notifier := mail.New(app, "https://lending.example.com")
+
+	start, err := types.ParseDateTime("2026-08-10 00:00:00.000Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	end, err := types.ParseDateTime("2026-08-01 00:00:00.000Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = devices.CreateRequest(app, notifier, device, requester, start, end, "")
+	if !errors.Is(err, devices.ErrInvalidDateRange) {
+		t.Fatalf("expected ErrInvalidDateRange, got %v", err)
+	}
+
+	pending, err := app.FindRecordsByFilter("lending_requests", "device = {:d}", "", 0, 0, map[string]any{"d": device.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("expected no request to be created, got %d", len(pending))
+	}
+}
+
+func TestCreateRequest_AllowsEndEqualToStart(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+
+	owner := newUser(t, app, "owner@example.com")
+	requester := newUser(t, app, "requester@example.com")
+	device := newDevice(t, app, owner, "Drill", "available")
+	notifier := mail.New(app, "https://lending.example.com")
+
+	same, err := types.ParseDateTime("2026-08-10 00:00:00.000Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := devices.CreateRequest(app, notifier, device, requester, same, same, ""); err != nil {
+		t.Fatalf("unexpected error for a same-day borrow: %v", err)
 	}
 }
 

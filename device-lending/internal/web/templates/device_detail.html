@@ -21,11 +21,27 @@
 {{if .CanRequest}}
 <h2>Request to borrow</h2>
 <form method="post" action="/devices/{{.Device.Id}}/request">
-  <label>Start date <input type="date" name="requested_start" required></label>
-  <label>End date (optional) <input type="date" name="requested_end"></label>
+  <label>Start date <input type="date" name="requested_start" id="requested_start" required></label>
+  <label>End date (optional) <input type="date" name="requested_end" id="requested_end"></label>
   <label>Message <textarea name="message"></textarea></label>
   <button type="submit">Request</button>
 </form>
+<script>
+  (function () {
+    var startInput = document.getElementById('requested_start');
+    var endInput = document.getElementById('requested_end');
+
+    function syncEndMin() {
+      endInput.min = startInput.value;
+      if (endInput.value && startInput.value && endInput.value < startInput.value) {
+        endInput.value = '';
+      }
+    }
+
+    startInput.addEventListener('change', syncEndMin);
+    syncEndMin();
+  })();
+</script>
 {{end}}
 
 {{if .MyPendingRequest}}

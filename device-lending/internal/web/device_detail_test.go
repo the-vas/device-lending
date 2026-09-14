@@ -150,6 +150,45 @@ func TestRequestDeviceHandler_CreatesPendingRequest(t *testing.T) {
 	}
 }
 
+func TestRequestDeviceHandler_RejectsEndBeforeStart(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+
+	owner := newTestUserFor(t, app, "owner@example.com")
+	requester := newTestUserFor(t, app, "requester@example.com")
+	device := newTestDeviceForBrowse(t, app, owner, "Cordless Drill")
+	notifier := mail.New(app, "https://lending.example.com")
+
+	form := url.Values{"requested_start": {"2026-08-10"}, "requested_end": {"2026-08-01"}}
+	req := httptest.NewRequest(http.MethodPost, "/devices/"+device.Id+"/request", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	mux := buildMux(t, app, func(e *core.ServeEvent) {
+		e.Router.BindFunc(func(re *core.RequestEvent) error {
+			re.Auth = requester
+			return re.Next()
+		})
+		e.Router.POST("/devices/{id}/request", web.RequestDeviceHandler(app, notifier))
+	})
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	pending, err := app.FindRecordsByFilter("lending_requests", "device = {:d}", "", 0, 0, map[string]any{"d": device.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("expected no request to be created, got %d", len(pending))
+	}
+}
+
 // TestRequestDeviceHandler_RejectsIneligibleRequests covers the three cases the
 // device page's CanRequest predicate hides but a direct POST could otherwise
 // still perform: requesting your own device, requesting a device that is not

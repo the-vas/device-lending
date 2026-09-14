@@ -51,6 +51,10 @@ func bindBootstrap(
 			return err
 		}
 
+		if err := authsetup.ApplyAppName(e.App); err != nil {
+			return err
+		}
+
 		if cfg.DevAuth {
 			if err := devauth.Setup(e.App); err != nil {
 				return err

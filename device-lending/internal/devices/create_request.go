@@ -59,6 +59,10 @@ func CheckRequestable(app core.App, device, requester *core.Record) error {
 	return nil
 }
 
+// ErrInvalidDateRange reports that a requested date range is malformed.
+// Callers should surface it as a 400, not a 500.
+var ErrInvalidDateRange = errors.New("invalid date range")
+
 // CreateRequest creates a pending lending_requests record, transitions the device
 // from "available" to "requested" if needed, and emails the owner.
 func CreateRequest(
@@ -70,6 +74,10 @@ func CreateRequest(
 ) (*core.Record, error) {
 	if err := CheckRequestable(app, device, requester); err != nil {
 		return nil, err
+	}
+
+	if !requestedEnd.IsZero() && requestedEnd.Before(requestedStart) {
+		return nil, fmt.Errorf("%w: requested end date cannot be before the start date", ErrInvalidDateRange)
 	}
 
 	col, err := app.FindCollectionByNameOrId("lending_requests")

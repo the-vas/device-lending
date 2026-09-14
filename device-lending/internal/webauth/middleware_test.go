@@ -80,6 +80,75 @@ func TestLoadSession_ValidCookie(t *testing.T) {
 	}
 }
 
+func TestLoadSession_DoesNotOverrideExistingAuth(t *testing.T) {
+	app, err := tests.NewTestApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+
+	cookieUser := newTestUserForSession(t, app)
+	cookieToken, err := cookieUser.NewAuthToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer := webauth.NewSigner("test-secret-at-least-32-bytes-long")
+
+	superusers, err := app.FindCollectionByNameOrId(core.CollectionNameSuperusers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	su := core.NewRecord(superusers)
+	su.SetEmail("admin@example.com")
+	su.SetRandomPassword()
+	if err := app.Save(su); err != nil {
+		t.Fatal(err)
+	}
+
+	router, err := apis.NewRouter(app)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serveEvent := &core.ServeEvent{App: app, Router: router}
+	err = app.OnServe().Trigger(serveEvent, func(e *core.ServeEvent) error {
+		// Simulates PocketBase's own Authorization-header auth, which in the
+		// real app runs at a much lower (earlier) priority than our default
+		// bind — registration order stands in for that here.
+		e.Router.BindFunc(func(re *core.RequestEvent) error {
+			re.Auth = su
+			return re.Next()
+		})
+		e.Router.BindFunc(webauth.LoadSession(signer))
+		e.Router.GET("/whoami", func(re *core.RequestEvent) error {
+			if re.Auth == nil {
+				return re.String(http.StatusUnauthorized, "anonymous")
+			}
+			return re.String(http.StatusOK, re.Auth.Collection().Name+":"+re.Auth.Id)
+		})
+		return e.Next()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux, err := router.BuildMux()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/whoami", nil)
+	req.AddCookie(&http.Cookie{Name: webauth.SessionCookieName, Value: signer.Sign(cookieToken)})
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	want := superusers.Name + ":" + su.Id
+	if rec.Body.String() != want {
+		t.Errorf("expected LoadSession to preserve pre-set superuser auth, got %q, want %q", rec.Body.String(), want)
+	}
+}
+
 func TestLoadSession_NoCookie(t *testing.T) {
 	app, err := tests.NewTestApp()
 	if err != nil {
